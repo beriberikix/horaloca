@@ -12,6 +12,7 @@ class CameraDevice {
     required this.label,
     required this.isLoopback,
     required this.isColor,
+    required this.isMono,
   });
 
   /// e.g. `/dev/video0`.
@@ -24,23 +25,28 @@ class CameraDevice {
   final bool isLoopback;
 
   /// True when the device advertises a colour pixel format (i.e. it is a normal
-  /// RGB webcam, not a mono/IR face-unlock sensor). Drives the default source
-  /// pick so we don't grab the greyscale IR camera.
+  /// RGB webcam). Drives the default source pick so we don't grab the
+  /// greyscale IR camera.
   final bool isColor;
+
+  /// True when the device enumerated formats but ALL were grey/IR (a mono
+  /// face-unlock sensor). [isColor] and [isMono] both false => unknown.
+  final bool isMono;
 
   /// A user-facing name for the tray menu, e.g. `Integrated Camera (/dev/video0)`.
   ///
   /// V4L2 card labels often carry a trailing ": <bus>" suffix; trim it so the
   /// menu is readable. The /dev path is always shown because a camera can
   /// expose several identically-named nodes — the path is how you tell them
-  /// apart. (We intentionally do NOT tag mono/IR here: in-snap format probing
-  /// is unreliable, so a wrong tag is worse than none.)
+  /// apart. Only tag mono/IR when we are *confident* (isMono), never on the
+  /// inconclusive case.
   String get menuLabel {
     String name = label.trim();
     final int colon = name.indexOf(':');
     if (colon > 0) name = name.substring(0, colon).trim();
-    if (name.isEmpty) return path;
-    return '$name ($path)';
+    if (name.isEmpty) name = path;
+    final String base = name == path ? path : '$name ($path)';
+    return isMono ? '$base — mono/IR' : base;
   }
 
   factory CameraDevice.fromMap(Map<Object?, Object?> map) {
@@ -49,6 +55,7 @@ class CameraDevice {
       label: map['label'] as String? ?? '',
       isLoopback: map['isLoopback'] as bool? ?? false,
       isColor: map['isColor'] as bool? ?? false,
+      isMono: map['isMono'] as bool? ?? false,
     );
   }
 }

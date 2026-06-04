@@ -46,12 +46,41 @@ bool IsColorFourcc(__u32 f) {
   }
 }
 
-// Open a V4L2 node, read its capability struct, and detect whether it offers a
-// colour format. Returns false if the node isn't a usable video device.
-// Logs what it finds to stderr so device selection is debuggable from a
-// terminal launch.
-bool QueryCap(const std::string& path, v4l2_capability* cap, bool* is_color) {
+// Enumerate the capture formats of an open fd for a given buffer type,
+// accumulating counts and a fourcc string. Returns the number of formats found.
+int EnumFormats(int fd, __u32 buf_type, bool* any_color, bool* any_other,
+                std::string* fourccs) {
+  int n = 0;
+  v4l2_fmtdesc fmt{};
+  fmt.type = buf_type;
+  for (fmt.index = 0; ::ioctl(fd, VIDIOC_ENUM_FMT, &fmt) == 0; ++fmt.index) {
+    ++n;
+    const __u32 f = fmt.pixelformat;
+    const char cc[5] = {static_cast<char>(f & 0xff),
+                        static_cast<char>((f >> 8) & 0xff),
+                        static_cast<char>((f >> 16) & 0xff),
+                        static_cast<char>((f >> 24) & 0xff), 0};
+    if (!fourccs->empty()) *fourccs += ',';
+    *fourccs += cc;
+    if (IsColorFourcc(f)) {
+      *any_color = true;
+    } else {
+      *any_other = true;
+    }
+  }
+  return n;
+}
+
+// Open a V4L2 node, read its capability struct, and classify it:
+//   is_color  -> offers a colour format (normal RGB webcam)
+//   is_mono   -> enumerated formats but ALL are grey/IR (face-unlock sensor)
+//   neither   -> enumeration was inconclusive (treat as "unknown" upstream)
+// Returns false if the node isn't a usable video device. Logs to stderr so
+// device selection is debuggable from a terminal launch.
+bool QueryCap(const std::string& path, v4l2_capability* cap, bool* is_color,
+              bool* is_mono) {
   *is_color = false;
+  *is_mono = false;
   int fd = ::open(path.c_str(), O_RDWR | O_NONBLOCK);
   if (fd < 0) {
     g_debug("horaloca: %s open failed (errno=%d)", path.c_str(), errno);
@@ -62,26 +91,21 @@ bool QueryCap(const std::string& path, v4l2_capability* cap, bool* is_color) {
     return false;
   }
 
-  // Enumerate capture formats; mark colour if any colour fourcc is present.
-  // Log the fourccs so device classification is debuggable from a terminal.
+  // Try single-plane first; some MIPI/IPU cams only enumerate via multiplanar.
+  bool any_color = false, any_other = false;
   std::string fourccs;
-  int n = 0;
-  v4l2_fmtdesc fmt{};
-  fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  for (fmt.index = 0; ::ioctl(fd, VIDIOC_ENUM_FMT, &fmt) == 0; ++fmt.index) {
-    ++n;
-    const __u32 f = fmt.pixelformat;
-    const char cc[5] = {static_cast<char>(f & 0xff),
-                        static_cast<char>((f >> 8) & 0xff),
-                        static_cast<char>((f >> 16) & 0xff),
-                        static_cast<char>((f >> 24) & 0xff), 0};
-    if (!fourccs.empty()) fourccs += ',';
-    fourccs += cc;
-    if (IsColorFourcc(f)) *is_color = true;
+  int n = EnumFormats(fd, V4L2_BUF_TYPE_VIDEO_CAPTURE, &any_color, &any_other,
+                      &fourccs);
+  if (n == 0) {
+    n = EnumFormats(fd, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, &any_color,
+                    &any_other, &fourccs);
   }
-  g_warning("horaloca: %s formats(%d)=[%s] -> color=%d", path.c_str(), n,
-            fourccs.c_str(), *is_color);
   ::close(fd);
+
+  *is_color = any_color;
+  *is_mono = (n > 0 && !any_color);  // enumerated something, but no colour
+  g_warning("horaloca: %s formats(%d)=[%s] -> color=%d mono=%d", path.c_str(),
+            n, fourccs.c_str(), *is_color, *is_mono);
   return true;
 }
 
@@ -122,8 +146,8 @@ std::vector<VideoDevice> PipelineController::ListDevices() {
     const std::string path = "/dev/video" + std::to_string(i);
 
     v4l2_capability cap{};
-    bool is_color = false;
-    if (!QueryCap(path, &cap, &is_color)) continue;
+    bool is_color = false, is_mono = false;
+    if (!QueryCap(path, &cap, &is_color, &is_mono)) continue;
 
     // Only surface nodes that can actually capture or output video. v4l2
     // exposes metadata-only nodes too (e.g. /dev/video1 on many UVC cams).
@@ -148,7 +172,7 @@ std::vector<VideoDevice> PipelineController::ListDevices() {
 
     if (!can_capture && !can_output) continue;
 
-    devices.push_back(VideoDevice{path, card, is_loopback, is_color});
+    devices.push_back(VideoDevice{path, card, is_loopback, is_color, is_mono});
   }
   return devices;
 }

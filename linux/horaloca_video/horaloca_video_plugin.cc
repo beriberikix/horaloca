@@ -103,6 +103,7 @@ void HandleMethodCall(FlMethodChannel* /*channel*/, FlMethodCall* method_call,
       fl_value_set_string_take(item, "isLoopback",
                                fl_value_new_bool(d.is_loopback));
       fl_value_set_string_take(item, "isColor", fl_value_new_bool(d.is_color));
+      fl_value_set_string_take(item, "isMono", fl_value_new_bool(d.is_mono));
       fl_value_append_take(list, item);
     }
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(list));

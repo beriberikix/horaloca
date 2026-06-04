@@ -114,9 +114,14 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  /// Choose the input camera: the user's explicit pick if it is still present,
-  /// otherwise the first *colour* camera (so we never default to a mono/IR
-  /// face-unlock sensor), otherwise the first camera at all.
+  /// Choose the input camera, in priority order:
+  ///   1. the user's explicit pick, if still present;
+  ///   2. the first confirmed *colour* camera;
+  ///   3. the first *non-mono* camera (unknown classification — e.g. a cam whose
+  ///      formats we couldn't enumerate in-snap; cameras are listed lowest /dev
+  ///      number first, which is almost always the primary RGB cam);
+  ///   4. anything (last resort, even a mono/IR sensor).
+  /// This keeps us off the greyscale IR camera however the probe behaves.
   CameraDevice? _chooseInput() {
     if (_cameras.isEmpty) return null;
     if (_selectedPath != null) {
@@ -126,6 +131,9 @@ class AppController extends ChangeNotifier {
     }
     for (final CameraDevice c in _cameras) {
       if (c.isColor) return c;
+    }
+    for (final CameraDevice c in _cameras) {
+      if (!c.isMono) return c;
     }
     return _cameras.first;
   }

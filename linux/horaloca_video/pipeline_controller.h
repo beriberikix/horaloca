@@ -20,7 +20,9 @@ struct VideoDevice {
   std::string path;    // "/dev/video0"
   std::string label;   // card label from VIDIOC_QUERYCAP
   bool is_loopback;    // driver == "v4l2 loopback"
-  bool is_color;       // advertises at least one color pixel format (not IR/mono)
+  bool is_color;       // advertises at least one color pixel format
+  bool is_mono;        // enumerated formats, but ALL are grey/IR (no color)
+                       // (both false => format enumeration was inconclusive)
 };
 
 // Pipeline lifecycle, mirrored to Dart's PipelineStatus.
