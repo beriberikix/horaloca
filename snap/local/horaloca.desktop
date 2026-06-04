@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=horaloca
+Comment=Overlay your local time onto a virtual webcam
+Exec=horaloca
+Icon=horaloca
+Terminal=false
+Type=Application
+Categories=Utility;AudioVideo;
+Keywords=webcam;timezone;clock;overlay;camera;
+StartupNotify=true
+# Background/tray utility — no window on launch.
+X-GNOME-UsesNotifications=false

@@ -1,0 +1,93 @@
+name: horaloca
+base: core24
+version: "0.1.0"
+title: horaloca
+license: Apache-2.0
+contact: https://github.com/beriberikix/horaloca/issues
+issues: https://github.com/beriberikix/horaloca/issues
+source-code: https://github.com/beriberikix/horaloca
+website: https://github.com/beriberikix/horaloca
+summary: Overlay your local time onto a virtual webcam
+description: |
+  horaloca is a passive, tongue-in-cheek utility for remote workers in highly
+  distributed teams. It taps your physical webcam, burns a highly readable
+  local-time-and-timezone badge into the corner of the feed, and republishes it
+  as a virtual webcam that Zoom, Google Meet, Slack and other apps can select —
+  a gentle reminder to colleagues that it's the middle of the night for you.
+
+  IMPORTANT — virtual camera prerequisite:
+  Because snaps run confined and cannot load kernel modules, you must install
+  and load the v4l2loopback module on the host first:
+
+    sudo apt install v4l2loopback-dkms
+    sudo modprobe v4l2loopback video_nr=10 \
+        card_label="horaloca Virtual Camera" exclusive_caps=1
+
+  See the project README for making this persistent across reboots.
+
+grade: stable
+confinement: strict
+
+# Pin the platform; horaloca targets modern Ubuntu LTS on amd64.
+platforms:
+  amd64:
+
+apps:
+  horaloca:
+    command: horaloca
+    extensions: [gnome]
+    common-id: com.beriberikix.horaloca
+    plugs:
+      # `camera` grants open()+ioctl on /dev/video* for BOTH the physical
+      # source and the v4l2loopback sink, and is auto-connected for snaps
+      # installed from the Snap Store (manual `snap connect` is only needed for
+      # sideloaded --dangerous installs).
+      - camera
+      - desktop
+      - desktop-legacy  # AppIndicator / system tray on Ubuntu
+      - wayland
+      - x11
+      - unity7          # legacy AppIndicator host (GNOME Ubuntu session)
+      - gsettings
+      - network         # NTP/timezone context; harmless if unused
+    environment:
+      # Ensure GStreamer can find its plugins staged below.
+      GST_PLUGIN_SYSTEM_PATH: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gstreamer-1.0
+      GST_PLUGIN_SCANNER: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner
+      LD_LIBRARY_PATH: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gstreamer-1.0:$LD_LIBRARY_PATH
+
+parts:
+  horaloca:
+    source: .
+    plugin: flutter
+    flutter-target: lib/main.dart
+    flutter-channel: stable
+    build-packages:
+      # Native video pipeline build dependencies.
+      - libgstreamer1.0-dev
+      - libgstreamer-plugins-base1.0-dev
+      - libcairo2-dev
+      - libpango1.0-dev
+      # System tray (AppIndicator) build dependency for tray_manager.
+      - libayatana-appindicator3-dev
+    stage-packages:
+      # GStreamer runtime + the exact plugins the pipeline uses:
+      #   v4l2src/v4l2sink (good), videoconvert/videoscale (base),
+      #   cairooverlay (cairo), textoverlay (pango fallback).
+      - libgstreamer1.0-0
+      - libgstreamer-plugins-base1.0-0
+      - gstreamer1.0-plugins-base
+      - gstreamer1.0-plugins-good
+      - libcairo2
+      - libpango-1.0-0
+      - libpangocairo-1.0-0
+      # AppIndicator runtime for the tray.
+      - libayatana-appindicator3-1
+
+  # Ship a desktop file + icon so the app appears in launchers.
+  metadata:
+    plugin: dump
+    source: snap/local
+    organize:
+      horaloca.desktop: share/applications/horaloca.desktop
+      app_icon.png: share/icons/hicolor/22x22/apps/horaloca.png
