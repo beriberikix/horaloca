@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'tz_locations.dart';
+
 /// Produces the formatted local-time string that gets burned into the video,
 /// and tracks the host's current timezone.
 ///
@@ -21,11 +23,16 @@ import 'package:timezone/timezone.dart' as tz;
 /// This class is pure Dart + OS reads — no hardware, no platform channel — so
 /// it is fully unit-testable (see test/clock_service_test.dart).
 class ClockService {
-  ClockService({this.use24HourClock = false}) {
+  ClockService({this.use24HourClock = false, TzLocations? locations})
+      : _locations = locations ?? TzLocations.empty() {
     // Load the bundled IANA database once. Safe to call repeatedly.
     tzdata.initializeTimeZones();
     _location = _resolveLocation();
   }
+
+  /// Resolves IANA zone -> "City, Country" for the timezone line. Injected so
+  /// the asset-loading stays out of this Flutter-binding-free class.
+  final TzLocations _locations;
 
   /// Path to the symlink Ubuntu/systemd maintains pointing at the active zone
   /// file under the zoneinfo tree. Reading its target yields the IANA name.
@@ -79,12 +86,22 @@ class ClockService {
   }
 
   /// Pure formatter, separated out so tests can pin a specific instant/zone.
+  ///
+  /// Produces two stacked lines — time on top, the full timezone line below:
+  ///
+  ///   11:35 AM
+  ///   CST (Taipei, Taiwan)
+  ///
+  /// The abbreviation now lives on the second line; the location is resolved
+  /// from the IANA zone via [TzLocations], falling back to the raw zone name.
   String format(tz.TZDateTime now) {
-    final String timePart = use24HourClock
+    final String time = use24HourClock
         ? DateFormat('HH:mm').format(now)
         : DateFormat('hh:mm a').format(now);
     final String abbreviation = now.timeZone.abbreviation;
-    return '$timePart ($abbreviation)';
+    final String location = _locations.labelFor(now.location.name) ??
+        now.location.name; // e.g. "Taipei, Taiwan"
+    return '$time\n$abbreviation ($location)';
   }
 
   void _emit() {

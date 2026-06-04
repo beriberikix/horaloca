@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:window_manager/window_manager.dart';
 
 import 'app/app_controller.dart';
 import 'services/clock_service.dart';
 import 'services/settings_store.dart';
 import 'services/tray_service.dart';
+import 'services/tz_locations.dart';
 import 'services/video_pipeline_bridge.dart';
 import 'ui/settings_window.dart';
 
@@ -34,7 +36,8 @@ Future<void> main() async {
 
   // Compose the object graph. Each dependency is constructed here so it can be
   // swapped in tests.
-  final ClockService clock = ClockService();
+  final TzLocations tzLocations = await _loadTzLocations();
+  final ClockService clock = ClockService(locations: tzLocations);
   final VideoPipelineBridge bridge = VideoPipelineBridge();
   final SettingsStore settings = SettingsStore();
   final AppController controller = AppController(
@@ -47,6 +50,18 @@ Future<void> main() async {
   await controller.initialize();
 
   runApp(HoralocaApp(controller: controller));
+}
+
+/// Load the bundled IANA tz data files and build the zone -> "City, Country"
+/// resolver. Failures degrade gracefully to an empty resolver (city-only).
+Future<TzLocations> _loadTzLocations() async {
+  try {
+    final String zone = await rootBundle.loadString('assets/tzdata/zone1970.tab');
+    final String iso = await rootBundle.loadString('assets/tzdata/iso3166.tab');
+    return TzLocations.parse(zone1970Tab: zone, iso3166Tab: iso);
+  } catch (_) {
+    return TzLocations.empty();
+  }
 }
 
 /// The Flutter UI shell. For MVP this is just the (hidden) settings window;
