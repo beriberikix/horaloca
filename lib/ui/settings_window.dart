@@ -324,6 +324,11 @@ class _PreviewCard extends StatelessWidget {
       config.position.horizontalAnchor * 2 - 1,
       config.position.verticalAnchor * 2 - 1,
     );
+    final String txt = config.text.isEmpty ? '--:--\n— (—)' : config.text;
+    final int nl = txt.indexOf('\n');
+    final String timeLine = nl == -1 ? txt : txt.substring(0, nl);
+    final String tzLine = nl == -1 ? '' : txt.substring(nl + 1);
+    final double base = 14 * config.fontScale.clamp(0.6, 1.6);
     return Container(
       height: 150,
       decoration: BoxDecoration(
@@ -344,14 +349,21 @@ class _PreviewCard extends StatelessWidget {
                     width: config.borderWidth)
                 : null,
           ),
-          child: Text(
-            config.text.isEmpty ? '--:--\n— (—)' : config.text,
+          child: Text.rich(
+            TextSpan(
+              children: <InlineSpan>[
+                TextSpan(text: timeLine, style: TextStyle(fontSize: base)),
+                if (tzLine.isNotEmpty)
+                  TextSpan(
+                      text: '\n$tzLine',
+                      style: TextStyle(fontSize: base * 0.72)),
+              ],
+            ),
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Color(config.textColor),
               fontFamily: config.fontFamily,
               fontWeight: FontWeight.bold,
-              fontSize: 14 * config.fontScale.clamp(0.6, 1.6),
               height: 1.1,
             ),
           ),

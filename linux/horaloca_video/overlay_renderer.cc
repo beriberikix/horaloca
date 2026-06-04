@@ -14,14 +14,18 @@ namespace {
 // the feed to fill a differently-shaped tile, so a badge hugging the edge gets
 // sliced off. 5.5% per side keeps it inside the region that survives a typical
 // crop — the broadcast title-safe convention — while still reading as "corner".
-constexpr double kSafeAreaFracX = 0.055;
-constexpr double kSafeAreaFracY = 0.055;
+constexpr double kSafeAreaFracX = 0.07;
+constexpr double kSafeAreaFracY = 0.07;
 // Inner padding between the text and the background block edge.
 constexpr double kInnerPaddingX = 16.0;
 constexpr double kInnerPaddingY = 9.0;
 // Base font size is this fraction of frame height (before font_scale). At the
-// pinned 720p reference this is ~37 px bold per line — readable in a Meet tile.
+// pinned 720p reference this is ~37 px bold — readable in a Meet tile. This is
+// the size of the time (first) line; the timezone line is drawn smaller.
 constexpr double kFontHeightFraction = 0.052;
+// The timezone line renders at this percent of the time line's size, so the
+// always-longer location string doesn't dominate. (Pango markup relative size.)
+constexpr int kTzLinePercent = 72;
 
 // Append a rounded-rectangle subpath to |cr|.
 void RoundedRect(cairo_t* cr, double x, double y, double w, double h, double r) {
@@ -92,24 +96,52 @@ void OverlayRenderer::Draw(cairo_t* cr) {
   pango_font_description_set_weight(desc, PANGO_WEIGHT_BOLD);
   pango_layout_set_font_description(layout, desc);
   pango_layout_set_alignment(layout, PANGO_ALIGN_CENTER);
-  pango_layout_set_text(layout, model.text.c_str(), -1);
+
+  // Render the time (first line) at the base size and the timezone line(s)
+  // smaller, via Pango markup. Text is escaped so city/country names can't
+  // break the markup.
+  {
+    const size_t nl = model.text.find('\n');
+    const std::string time_line =
+        nl == std::string::npos ? model.text : model.text.substr(0, nl);
+    gchar* time_esc = g_markup_escape_text(time_line.c_str(), -1);
+    std::string markup = time_esc;
+    g_free(time_esc);
+    if (nl != std::string::npos) {
+      gchar* tz_esc = g_markup_escape_text(model.text.c_str() + nl + 1, -1);
+      markup += "\n<span size=\"" + std::to_string(kTzLinePercent) + "%\">";
+      markup += tz_esc;
+      markup += "</span>";
+      g_free(tz_esc);
+    }
+    pango_layout_set_markup(layout, markup.c_str(), -1);
+  }
+
+  // Title-safe insets and the badge's internal padding.
+  const double pad_in_x = kInnerPaddingX * scale;
+  const double pad_in_y = kInnerPaddingY * scale;
+  const double pad_x = width * kSafeAreaFracX;
+  const double pad_y = height * kSafeAreaFracY;
 
   int text_w_pango = 0, text_h_pango = 0;
   pango_layout_get_pixel_size(layout, &text_w_pango, &text_h_pango);
-  // Pin the layout width to the widest line so CENTER alignment actually
-  // centers the shorter line(s) beneath it.
-  pango_layout_set_width(layout, text_w_pango * PANGO_SCALE);
+  // Never let the badge overflow the frame: if the text is wider than the room
+  // inside the safe area, constrain the layout width (the long line wraps);
+  // otherwise pin width to the widest line so CENTER centers shorter lines.
+  const double max_text_w = width - 2 * pad_x - 2 * pad_in_x;
+  if (max_text_w > 0 && text_w_pango > max_text_w) {
+    pango_layout_set_width(layout, static_cast<int>(max_text_w * PANGO_SCALE));
+    pango_layout_get_pixel_size(layout, &text_w_pango, &text_h_pango);
+  } else {
+    pango_layout_set_width(layout, text_w_pango * PANGO_SCALE);
+  }
   const double text_w = text_w_pango;
   const double text_h = text_h_pango;
 
   // --- Badge box size + anchored, title-safe position. ---
-  const double pad_in_x = kInnerPaddingX * scale;
-  const double pad_in_y = kInnerPaddingY * scale;
   const double box_w = text_w + 2 * pad_in_x;
   const double box_h = text_h + 2 * pad_in_y;
 
-  const double pad_x = width * kSafeAreaFracX;
-  const double pad_y = height * kSafeAreaFracY;
   const double hx = HorizontalAnchor(model.position);
   const double vy = VerticalAnchor(model.position);
 

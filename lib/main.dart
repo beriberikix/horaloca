@@ -18,18 +18,23 @@ import 'ui/settings_window.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configure the window to start hidden, skip the taskbar, and be small —
-  // it is a settings panel, not the primary surface.
+  // Configure the window as a fixed-size settings panel (it is not the primary
+  // surface — the app lives in the tray). A fixed size avoids the cramped
+  // default and keeps the controls laid out predictably.
   await windowManager.ensureInitialized();
+  const Size kSettingsSize = Size(460, 780);
   const WindowOptions windowOptions = WindowOptions(
-    size: Size(420, 320),
+    size: kSettingsSize,
+    minimumSize: kSettingsSize,
+    maximumSize: kSettingsSize,
     center: true,
     skipTaskbar: true,
     titleBarStyle: TitleBarStyle.normal,
     title: 'horaloca',
   );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    // Stay out of sight; the tray is the real UI for MVP.
+    await windowManager.setResizable(false); // fixed-size panel
+    // Stay out of sight; the tray is the real UI.
     await windowManager.hide();
     await windowManager.setPreventClose(true); // closing hides instead of quits
   });
@@ -47,7 +52,10 @@ Future<void> main() async {
     trayFactory: TrayService.new,
   );
 
-  await controller.initialize();
+  // Start stopped — the camera only turns on when the user chooses (tray
+  // "Status" or the Settings window's Start button). This keeps the webcam
+  // light off until explicitly requested.
+  await controller.initialize(autoStart: false);
 
   runApp(HoralocaApp(controller: controller));
 }
