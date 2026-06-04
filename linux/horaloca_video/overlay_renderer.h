@@ -31,17 +31,10 @@ class OverlayRenderer {
   void Draw(cairo_t* cr);
 
  private:
-  // Resolve the PNG background once and cache it; reloaded if the path changes.
-  cairo_surface_t* LoadPngBackground(const std::string& path);
-
   std::mutex mutex_;
   OverlayModel model_;
   int frame_width_ = 0;
   int frame_height_ = 0;
-
-  // Cache for the Phase 2 custom PNG background.
-  std::string cached_png_path_;
-  cairo_surface_t* cached_png_ = nullptr;
 };
 
 }  // namespace horaloca

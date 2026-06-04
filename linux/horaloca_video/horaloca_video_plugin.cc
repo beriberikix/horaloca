@@ -1,7 +1,11 @@
 #include "horaloca_video_plugin.h"
 
+#include <pango/pangocairo.h>
+
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "overlay_model.h"
 #include "pipeline_controller.h"
@@ -48,6 +52,15 @@ double GetDouble(FlValue* map, const char* key, double fallback) {
   }
 }
 
+// Colours travel as ARGB ints; the channel codec widens them to int64.
+uint32_t GetColor(FlValue* map, const char* key, uint32_t fallback) {
+  FlValue* v = fl_value_lookup_string(map, key);
+  if (v != nullptr && fl_value_get_type(v) == FL_VALUE_TYPE_INT) {
+    return static_cast<uint32_t>(fl_value_get_int(v) & 0xFFFFFFFF);
+  }
+  return fallback;
+}
+
 // Marshal a MethodChannel overlay map into the C++ OverlayModel.
 OverlayModel ModelFromArgs(FlValue* map) {
   OverlayModel model;
@@ -58,13 +71,40 @@ OverlayModel ModelFromArgs(FlValue* map) {
   model.position = OverlayPositionFromWire(GetString(map, "position", "bottomLeft"));
   model.font_family = GetString(map, "fontFamily", "Ubuntu");
   model.font_scale = GetDouble(map, "fontScale", 1.0);
-  model.background_opacity = GetDouble(map, "backgroundOpacity", 0.62);
-  // pngBackgroundPath may be null (MVP).
-  FlValue* png = fl_value_lookup_string(map, "pngBackgroundPath");
-  if (png != nullptr && fl_value_get_type(png) == FL_VALUE_TYPE_STRING) {
-    model.png_background_path = fl_value_get_string(png);
-  }
+  model.corner_radius = GetDouble(map, "cornerRadius", 12.0);
+  model.border_width = GetDouble(map, "borderWidth", 0.0);
+  model.text_color = GetColor(map, "textColor", 0xFFFFFFFFu);
+  model.background_color = GetColor(map, "backgroundColor", 0x9E000000u);
+  model.border_color = GetColor(map, "borderColor", 0xFFFFFFFFu);
   return model;
+}
+
+// Enumerate the system's installed font families via Pango/fontconfig and
+// return them (sorted, de-duplicated) as an FlValue string list for the
+// settings UI font picker.
+FlValue* ListFontFamilies() {
+  FlValue* list = fl_value_new_list();
+  PangoFontMap* font_map = pango_cairo_font_map_get_default();
+  if (font_map == nullptr) return list;
+
+  PangoFontFamily** families = nullptr;
+  int n = 0;
+  pango_font_map_list_families(font_map, &families, &n);
+
+  std::vector<std::string> names;
+  names.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    const char* name = pango_font_family_get_name(families[i]);
+    if (name != nullptr && name[0] != '\0') names.emplace_back(name);
+  }
+  g_free(families);
+
+  std::sort(names.begin(), names.end());
+  names.erase(std::unique(names.begin(), names.end()), names.end());
+  for (const std::string& name : names) {
+    fl_value_append_take(list, fl_value_new_string(name.c_str()));
+  }
+  return list;
 }
 
 // Push a status event up to Dart (if subscribed). Called from the controller's
@@ -126,6 +166,10 @@ void HandleMethodCall(FlMethodChannel* /*channel*/, FlMethodCall* method_call,
     state->controller->UpdateOverlay(ModelFromArgs(args));
     g_autoptr(FlValue) ok = fl_value_new_null();
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(ok));
+
+  } else if (g_strcmp0(method, "listFonts") == 0) {
+    g_autoptr(FlValue) list = ListFontFamilies();
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(list));
 
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());

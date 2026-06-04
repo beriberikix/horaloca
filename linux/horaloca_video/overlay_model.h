@@ -4,6 +4,7 @@
 #ifndef HORALOCA_VIDEO_OVERLAY_MODEL_H_
 #define HORALOCA_VIDEO_OVERLAY_MODEL_H_
 
+#include <cstdint>
 #include <string>
 
 namespace horaloca {
@@ -31,26 +32,30 @@ double HorizontalAnchor(OverlayPosition p);
 // Vertical anchor fraction: 0.0 top, 0.5 middle, 1.0 bottom.
 double VerticalAnchor(OverlayPosition p);
 
-// Everything the Cairo renderer needs to paint one badge.
+// Everything the Cairo renderer needs to paint one badge. Mirrors the Dart
+// OverlayConfig. Multi-line text is stacked (centered) by the renderer.
 struct OverlayModel {
-  // The formatted string to draw, e.g. "03:45 AM (PST)".
+  // The formatted string to draw, e.g. "11:35 AM\nCST (Taipei, Taiwan)".
   std::string text;
 
   OverlayPosition position = OverlayPosition::kBottomLeft;
 
-  // Font family name resolved by Pango/Cairo (bundled "Ubuntu" by default).
+  // Font family name resolved by Pango/fontconfig.
   std::string font_family = "Ubuntu";
 
   // Multiplier on the resolution-derived base font size.
   double font_scale = 1.0;
 
-  // Opacity 0..1 of the default dark block. Ignored when png_background_path
-  // is non-empty.
-  double background_opacity = 0.62;
+  // Background block corner radius in px (0 = square).
+  double corner_radius = 12.0;
 
-  // Absolute path to a user PNG background, or empty for the default block.
-  // (Phase 2 — the renderer already branches on it.)
-  std::string png_background_path;
+  // Border stroke width in px (0 = no border).
+  double border_width = 0.0;
+
+  // ARGB colours (0xAARRGGBB).
+  uint32_t text_color = 0xFFFFFFFFu;
+  uint32_t background_color = 0x9E000000u;
+  uint32_t border_color = 0xFFFFFFFFu;
 };
 
 }  // namespace horaloca
