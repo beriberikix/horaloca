@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../models/overlay_config.dart';
 import '../services/clock_service.dart';
@@ -35,6 +36,7 @@ class AppController extends ChangeNotifier {
         onToggleRunning: toggleRunning,
         onRefreshTimezone: refreshTimezone,
         onSelectCamera: selectCamera,
+        onOpenSettings: showSettings,
         onQuit: quit,
       ),
     );
@@ -70,6 +72,10 @@ class AppController extends ChangeNotifier {
   Future<void> initialize({bool autoStart = true}) async {
     await _settings.load();
     _selectedPath = _settings.selectedCameraPath;
+
+    // Restore persisted styling, then layer on the live clock text.
+    final OverlayConfig? saved = _settings.overlayConfig;
+    if (saved != null) _config = saved;
 
     _state = _state.copyWith(timezoneName: _clock.timezoneName);
     _config = _config.copyWith(text: _clock.currentFormatted());
@@ -247,14 +253,26 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Phase 2 entry point: apply an edited overlay configuration (position,
-  /// font, scale, PNG background…). Text is preserved from the live clock.
+  /// Apply an edited overlay configuration (position, font, scale, colours,
+  /// corner, border). Text is preserved from the live clock. Persists the
+  /// styling and live-updates the running pipeline.
   Future<void> updateConfig(OverlayConfig newConfig) async {
     _config = newConfig.copyWith(text: _clock.currentFormatted());
+    unawaited(_settings.setOverlayConfig(_config));
     if (_state.isRunning) {
       unawaited(_bridge.updateOverlay(_config));
     }
     notifyListeners();
+  }
+
+  /// The machine's installed font families, for the settings font picker.
+  Future<List<String>> listFonts() => _bridge.listFonts();
+
+  /// Show the settings window (invoked from the tray "Settings…" item).
+  Future<void> showSettings() async {
+    await windowManager.setSkipTaskbar(false);
+    await windowManager.show();
+    await windowManager.focus();
   }
 
   Future<void> quit() async {

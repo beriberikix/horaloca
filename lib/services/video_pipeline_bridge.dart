@@ -92,6 +92,15 @@ class VideoPipelineBridge {
     });
   }
 
+  /// Enumerate the machine's installed font families (via native Pango/
+  /// fontconfig) for the settings font picker. Sorted, de-duplicated.
+  Future<List<String>> listFonts() async {
+    final List<Object?>? result =
+        await _method.invokeMethod<List<Object?>>('listFonts');
+    if (result == null) return const <String>[];
+    return result.whereType<String>().toList(growable: false);
+  }
+
   /// Enumerate physical inputs and the detected loopback sink.
   Future<List<CameraDevice>> listDevices() async {
     final List<Object?>? result =

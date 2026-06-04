@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../models/overlay_config.dart';
+
 /// Tiny JSON-file settings store for the handful of things horaloca needs to
 /// remember between launches (currently just the chosen camera).
 ///
@@ -11,6 +13,7 @@ class SettingsStore {
   SettingsStore({String? overridePath}) : _path = overridePath ?? _defaultPath();
 
   static const String _selectedCameraKey = 'selectedCameraPath';
+  static const String _overlayKey = 'overlay';
 
   final String _path;
   Map<String, Object?> _data = <String, Object?>{};
@@ -44,6 +47,23 @@ class SettingsStore {
     } else {
       _data[_selectedCameraKey] = path;
     }
+    await _save();
+  }
+
+  /// The persisted overlay styling, or null if never saved. The volatile
+  /// `text` field is not stored — it's supplied live by the clock.
+  OverlayConfig? get overlayConfig {
+    final Object? raw = _data[_overlayKey];
+    if (raw is Map) {
+      return OverlayConfig.fromMap(raw.cast<String, Object?>());
+    }
+    return null;
+  }
+
+  /// Persist the overlay styling (sans the live `text`).
+  Future<void> setOverlayConfig(OverlayConfig config) async {
+    final Map<String, Object?> map = config.toMap()..remove('text');
+    _data[_overlayKey] = map;
     await _save();
   }
 

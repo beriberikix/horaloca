@@ -11,6 +11,7 @@ class TrayCallbacks {
     required this.onToggleRunning,
     required this.onRefreshTimezone,
     required this.onSelectCamera,
+    required this.onOpenSettings,
     required this.onQuit,
   });
 
@@ -22,6 +23,9 @@ class TrayCallbacks {
 
   /// Switch the source camera to the given /dev/videoN path.
   final void Function(String devicePath) onSelectCamera;
+
+  /// Show the settings window.
+  final void Function() onOpenSettings;
 
   /// Tear everything down and exit.
   final void Function() onQuit;
@@ -47,6 +51,7 @@ class TrayService with TrayListener {
   // Distinct keys so onTrayMenuItemClick can dispatch without ambiguity.
   static const String _kStatus = 'status';
   static const String _kRefreshTz = 'refresh_tz';
+  static const String _kSettings = 'settings';
   static const String _kQuit = 'quit';
   // Camera items use this prefix; the device path follows after it.
   static const String _kCameraPrefix = 'camera::';
@@ -101,6 +106,7 @@ class TrayService with TrayListener {
           disabled: true,
         ),
         MenuItem.separator(),
+        MenuItem(key: _kSettings, label: 'Settings…'),
         MenuItem(key: _kQuit, label: 'Quit'),
       ],
     );
@@ -167,6 +173,9 @@ class TrayService with TrayListener {
         break;
       case _kRefreshTz:
         _callbacks.onRefreshTimezone();
+        break;
+      case _kSettings:
+        _callbacks.onOpenSettings();
         break;
       case _kQuit:
         _callbacks.onQuit();

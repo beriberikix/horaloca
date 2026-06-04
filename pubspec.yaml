@@ -28,6 +28,9 @@ dependencies:
   # Locale-aware time formatting (12h/24h, AM/PM).
   intl: ^0.19.0
 
+  # Pure-Dart RGBA colour picker for the settings window (text/bg/border).
+  flutter_colorpicker: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -38,6 +41,7 @@ flutter:
 
   assets:
     - assets/icons/
+    - assets/tzdata/
 
   # NOTE: The burned-in overlay is rendered natively via Pango/Cairo, which
   # resolves the "Ubuntu" family through fontconfig — preinstalled on Ubuntu
