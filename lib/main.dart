@@ -1,0 +1,73 @@
+import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
+
+import 'app/app_controller.dart';
+import 'services/clock_service.dart';
+import 'services/settings_store.dart';
+import 'services/tray_service.dart';
+import 'services/video_pipeline_bridge.dart';
+import 'ui/settings_window.dart';
+
+/// horaloca entry point.
+///
+/// The app is a *background* utility: at launch we hide the main window and
+/// live in the system tray. The (currently minimal) window is only the Phase 2
+/// settings surface; it can be re-shown later from a tray menu item.
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure the window to start hidden, skip the taskbar, and be small —
+  // it is a settings panel, not the primary surface.
+  await windowManager.ensureInitialized();
+  const WindowOptions windowOptions = WindowOptions(
+    size: Size(420, 320),
+    center: true,
+    skipTaskbar: true,
+    titleBarStyle: TitleBarStyle.normal,
+    title: 'horaloca',
+  );
+  await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    // Stay out of sight; the tray is the real UI for MVP.
+    await windowManager.hide();
+    await windowManager.setPreventClose(true); // closing hides instead of quits
+  });
+
+  // Compose the object graph. Each dependency is constructed here so it can be
+  // swapped in tests.
+  final ClockService clock = ClockService();
+  final VideoPipelineBridge bridge = VideoPipelineBridge();
+  final SettingsStore settings = SettingsStore();
+  final AppController controller = AppController(
+    clock: clock,
+    bridge: bridge,
+    settings: settings,
+    trayFactory: TrayService.new,
+  );
+
+  await controller.initialize();
+
+  runApp(HoralocaApp(controller: controller));
+}
+
+/// The Flutter UI shell. For MVP this is just the (hidden) settings window;
+/// it exists so the engine/runtime stays alive to host the platform channels
+/// and the tray.
+class HoralocaApp extends StatelessWidget {
+  const HoralocaApp({super.key, required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'horaloca',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorSchemeSeed: const Color(0xFFE95420), // Ubuntu orange
+        useMaterial3: true,
+        fontFamily: 'Ubuntu',
+      ),
+      home: SettingsWindow(controller: controller),
+    );
+  }
+}
